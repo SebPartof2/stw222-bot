@@ -228,58 +228,46 @@ async function postScheduleToChannel(forceRefresh = false) {
     const scheduleData = await fetchSchedule();
     const upcomingStreams = getUpcomingStreams(scheduleData);
 
-    // Create maps for comparison
-    const upcomingByKey = new Map(upcomingStreams.map(s => [getStreamKey(s), s]));
-    const upcomingById = new Map(upcomingStreams.map(s => [getStreamId(s), s]));
+    // Create set of expected stream keys
+    const upcomingKeys = upcomingStreams.map(s => getStreamKey(s));
 
     // Fetch existing messages
     const messages = await channel.messages.fetch({ limit: 100 });
     const now = new Date();
-    const existingKeys = new Set();
-    const messagesToDelete = [];
+    const streamMessages = [];
     let hasHeader = false;
 
-    // Check each message
+    // Collect stream messages and check header
     for (const message of messages.values()) {
-      // Only process bot's own messages with embeds
       if (message.author.id !== client.user.id) continue;
 
-      // Check if this is the header
       if (isHeaderMessage(message)) {
         hasHeader = true;
         continue;
       }
 
-      const streamKey = extractStreamKeyFromMessage(message);
-      if (!streamKey) {
-        messagesToDelete.push(message);
-        continue;
-      }
-
-      const streamDate = parseStreamKeyToDate(streamKey);
-      if (!streamDate || streamDate < now) {
-        // Stream is in the past, delete it
-        console.log(`Removing past stream: ${streamKey}`);
-        messagesToDelete.push(message);
-      } else if (upcomingByKey.has(streamKey)) {
-        // Stream exists with same content, keep it
-        existingKeys.add(streamKey);
-      } else {
-        // Check if stream exists but content changed
-        const streamId = extractStreamIdFromKey(streamKey);
-        if (upcomingById.has(streamId)) {
-          console.log(`Removing updated stream: ${streamId}`);
-          messagesToDelete.push(message);
-        } else {
-          // Stream was removed from schedule
-          console.log(`Removing deleted stream: ${streamKey}`);
-          messagesToDelete.push(message);
-        }
-      }
+      streamMessages.push(message);
     }
 
-    // Delete old/removed/updated messages
-    for (const message of messagesToDelete) {
+    // Get existing keys in message order (oldest first)
+    streamMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+    const existingKeys = streamMessages
+      .map(m => extractStreamKeyFromMessage(m))
+      .filter(k => k !== null);
+
+    // Check if streams match in order
+    const streamsMatch = existingKeys.length === upcomingKeys.length &&
+      existingKeys.every((key, i) => key === upcomingKeys[i]);
+
+    if (streamsMatch && hasHeader) {
+      console.log('No changes needed');
+      return;
+    }
+
+    // Something changed - delete all stream messages and repost
+    console.log('Changes detected, refreshing all streams...');
+
+    for (const message of streamMessages) {
       await message.delete().catch(() => {});
     }
 
@@ -289,23 +277,14 @@ async function postScheduleToChannel(forceRefresh = false) {
       await channel.send({ embeds: [createHeaderEmbed()] });
     }
 
-    // Find new streams to add (includes updated streams)
-    const newStreams = upcomingStreams.filter(s => !existingKeys.has(getStreamKey(s)));
-
-    if (newStreams.length === 0 && messagesToDelete.length === 0) {
-      console.log('No changes needed');
-      return;
-    }
-
-    console.log(`Removed ${messagesToDelete.length} messages, adding ${newStreams.length} new streams`);
-
-    // Post new streams
-    for (let i = 0; i < newStreams.length; i++) {
-      const stream = newStreams[i];
+    // Post all streams in order
+    console.log(`Posting ${upcomingStreams.length} streams...`);
+    for (let i = 0; i < upcomingStreams.length; i++) {
+      const stream = upcomingStreams[i];
       console.log(`Posting: ${stream.title} on ${stream.date}`);
       const embed = createStreamEmbed(stream, scheduleData.streamer, scheduleData.categories);
       await channel.send({ embeds: [embed] });
-      if (i < newStreams.length - 1) {
+      if (i < upcomingStreams.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
