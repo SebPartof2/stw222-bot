@@ -69,6 +69,21 @@ function getStreamKey(stream) {
   return `${getStreamId(stream)}|${getStreamHash(stream)}`;
 }
 
+const HEADER_FOOTER = 'schedule-header';
+
+function createHeaderEmbed() {
+  return new EmbedBuilder()
+    .setTitle('📺 Upcoming Streams')
+    .setDescription('See schedule below!\n\n**Full site:** https://schedule.stw222.live/')
+    .setColor(0x9146FF)
+    .setFooter({ text: HEADER_FOOTER });
+}
+
+function isHeaderMessage(message) {
+  if (!message.embeds || message.embeds.length === 0) return false;
+  return message.embeds[0].footer?.text === HEADER_FOOTER;
+}
+
 function createStreamEmbed(stream, streamer, categories) {
   const category = categories[stream.category] || categories.other;
   const emoji = categoryEmojis[stream.category] || '🎮';
@@ -168,6 +183,9 @@ async function hardResetChannel() {
     console.log(`Hard reset: clearing #${channel.name}...`);
     await clearChannel(channel);
 
+    // Post header first
+    await channel.send({ embeds: [createHeaderEmbed()] });
+
     const scheduleData = await fetchSchedule();
     const upcomingStreams = getUpcomingStreams(scheduleData);
 
@@ -219,11 +237,18 @@ async function postScheduleToChannel(forceRefresh = false) {
     const now = new Date();
     const existingKeys = new Set();
     const messagesToDelete = [];
+    let hasHeader = false;
 
     // Check each message
     for (const message of messages.values()) {
       // Only process bot's own messages with embeds
       if (message.author.id !== client.user.id) continue;
+
+      // Check if this is the header
+      if (isHeaderMessage(message)) {
+        hasHeader = true;
+        continue;
+      }
 
       const streamKey = extractStreamKeyFromMessage(message);
       if (!streamKey) {
@@ -256,6 +281,12 @@ async function postScheduleToChannel(forceRefresh = false) {
     // Delete old/removed/updated messages
     for (const message of messagesToDelete) {
       await message.delete().catch(() => {});
+    }
+
+    // Add header if missing
+    if (!hasHeader) {
+      console.log('Adding header embed...');
+      await channel.send({ embeds: [createHeaderEmbed()] });
     }
 
     // Find new streams to add (includes updated streams)
