@@ -1,0 +1,14 @@
+{
+  "name": "stw222-bot",
+  "version": "1.0.0",
+  "description": "Discord bot to display stw222 stream schedule",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "register": "node src/register-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^17.2.3"
+  }
+}
