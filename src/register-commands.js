@@ -5,6 +5,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName('schedule')
     .setDescription('Show upcoming streams')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption(option =>
       option.setName('limit')
         .setDescription('Number of streams to show (default: 5, max: 10)')
@@ -13,10 +14,15 @@ const commands = [
     ),
   new SlashCommandBuilder()
     .setName('nextstream')
-    .setDescription('Show the next upcoming stream'),
+    .setDescription('Show the next upcoming stream')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName('refresh')
-    .setDescription('Refresh the schedule channel (admin only)')
+    .setDescription('Refresh the schedule channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder()
+    .setName('hardreset')
+    .setDescription('Clear channel and repost all streams')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 ];
 
