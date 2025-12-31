@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const crypto = require('crypto');
 
 const SCHEDULE_URL = 'https://raw.githubusercontent.com/stw222/stw222-schedule/main/data/schedule.json';
 const REFRESH_INTERVAL = 60 * 60 * 1000; // 1 hour
@@ -45,9 +46,27 @@ function getUpcomingStreams(scheduleData) {
     .sort((a, b) => a.dateTime - b.dateTime);
 }
 
-function getStreamKey(stream) {
-  // Unique key for each stream based on date and time
+function getStreamId(stream) {
+  // Base ID for stream (date|time) - used for date comparison
   return `${stream.date}|${stream.startTime}`;
+}
+
+function getStreamHash(stream) {
+  // Hash of all content fields to detect changes
+  const content = [
+    stream.date,
+    stream.startTime,
+    stream.title,
+    stream.description || '',
+    stream.image || '',
+    stream.category
+  ].join('|');
+  return crypto.createHash('md5').update(content).digest('hex').substring(0, 8);
+}
+
+function getStreamKey(stream) {
+  // Full key: date|time|hash
+  return `${getStreamId(stream)}|${getStreamHash(stream)}`;
 }
 
 function createStreamEmbed(stream, streamer, categories) {
@@ -88,7 +107,7 @@ function createStreamEmbed(stream, streamer, categories) {
 }
 
 function extractStreamKeyFromMessage(message) {
-  // Extract stream key from embed footer
+  // Extract full stream key from embed footer
   if (!message.embeds || message.embeds.length === 0) return null;
   const footer = message.embeds[0].footer?.text;
   if (!footer || !footer.includes('|')) return null;
@@ -97,8 +116,15 @@ function extractStreamKeyFromMessage(message) {
   return parts.slice(1).join('|').trim();
 }
 
+function extractStreamIdFromKey(streamKey) {
+  // Extract base ID (date|time) from full key (date|time|hash)
+  const parts = streamKey.split('|');
+  if (parts.length < 2) return null;
+  return `${parts[0]}|${parts[1]}`;
+}
+
 function parseStreamKeyToDate(streamKey) {
-  // Parse stream key (date|time) to Date object
+  // Parse stream key to Date object (works with both date|time and date|time|hash)
   const [date, time] = streamKey.split('|');
   if (!date || !time) return null;
   const [year, month, day] = date.split('-');
@@ -183,7 +209,10 @@ async function postScheduleToChannel(forceRefresh = false) {
     // Fetch current schedule
     const scheduleData = await fetchSchedule();
     const upcomingStreams = getUpcomingStreams(scheduleData);
-    const upcomingKeys = new Set(upcomingStreams.map(s => getStreamKey(s)));
+
+    // Create maps for comparison
+    const upcomingByKey = new Map(upcomingStreams.map(s => [getStreamKey(s), s]));
+    const upcomingById = new Map(upcomingStreams.map(s => [getStreamId(s), s]));
 
     // Fetch existing messages
     const messages = await channel.messages.fetch({ limit: 100 });
@@ -207,22 +236,29 @@ async function postScheduleToChannel(forceRefresh = false) {
         // Stream is in the past, delete it
         console.log(`Removing past stream: ${streamKey}`);
         messagesToDelete.push(message);
-      } else if (!upcomingKeys.has(streamKey)) {
-        // Stream was removed from schedule
-        console.log(`Removing deleted stream: ${streamKey}`);
-        messagesToDelete.push(message);
-      } else {
-        // Stream still upcoming, keep it
+      } else if (upcomingByKey.has(streamKey)) {
+        // Stream exists with same content, keep it
         existingKeys.add(streamKey);
+      } else {
+        // Check if stream exists but content changed
+        const streamId = extractStreamIdFromKey(streamKey);
+        if (upcomingById.has(streamId)) {
+          console.log(`Removing updated stream: ${streamId}`);
+          messagesToDelete.push(message);
+        } else {
+          // Stream was removed from schedule
+          console.log(`Removing deleted stream: ${streamKey}`);
+          messagesToDelete.push(message);
+        }
       }
     }
 
-    // Delete old/removed messages
+    // Delete old/removed/updated messages
     for (const message of messagesToDelete) {
       await message.delete().catch(() => {});
     }
 
-    // Find new streams to add
+    // Find new streams to add (includes updated streams)
     const newStreams = upcomingStreams.filter(s => !existingKeys.has(getStreamKey(s)));
 
     if (newStreams.length === 0 && messagesToDelete.length === 0) {
