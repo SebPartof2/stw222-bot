@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const crypto = require('crypto');
 
 const SCHEDULE_URL = 'https://raw.githubusercontent.com/stw222/stw222-schedule/main/data/schedule.json';
-const REFRESH_INTERVAL = 60 * 60 * 1000; // 1 hour
+const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
