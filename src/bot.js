@@ -262,16 +262,9 @@ async function postScheduleToChannel(forceRefresh = false) {
       return;
     }
 
-    // Something changed - delete all stream messages and footer, then repost
-    console.log('Changes detected, refreshing all streams...');
-
-    if (headerMessage) {
-      await headerMessage.delete().catch(() => {});
-    }
-
-    for (const message of streamMessages) {
-      await message.delete().catch(() => {});
-    }
+    // Something changed - clear channel and repost
+    console.log('Changes detected, clearing channel...');
+    await clearChannel(channel);
 
     // Post all streams in order
     console.log(`Posting ${upcomingStreams.length} streams...`);
