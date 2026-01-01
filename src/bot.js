@@ -71,10 +71,10 @@ function getStreamKey(stream) {
 
 const HEADER_FOOTER = 'schedule-header';
 
-function createHeaderEmbed() {
+function createFooterEmbed() {
   return new EmbedBuilder()
     .setTitle('📺 Upcoming Streams')
-    .setDescription('See schedule below!\n\n**Full site:** https://schedule.stw222.live/')
+    .setDescription('See full schedule above!\n\n**Website:** https://schedule.stw222.live/')
     .setColor(0x9146FF)
     .setFooter({ text: HEADER_FOOTER });
 }
@@ -183,9 +183,6 @@ async function hardResetChannel() {
     console.log(`Hard reset: clearing #${channel.name}...`);
     await clearChannel(channel);
 
-    // Post header first
-    await channel.send({ embeds: [createHeaderEmbed()] });
-
     const scheduleData = await fetchSchedule();
     const upcomingStreams = getUpcomingStreams(scheduleData);
 
@@ -200,10 +197,11 @@ async function hardResetChannel() {
       const stream = upcomingStreams[i];
       const embed = createStreamEmbed(stream, scheduleData.streamer, scheduleData.categories);
       await channel.send({ embeds: [embed] });
-      if (i < upcomingStreams.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
+
+    // Post footer last
+    await channel.send({ embeds: [createFooterEmbed()] });
 
     console.log(`Hard reset complete in #${channel.name}`);
   } catch (error) {
@@ -264,17 +262,11 @@ async function postScheduleToChannel(forceRefresh = false) {
       return;
     }
 
-    // Something changed - delete all stream messages and repost
+    // Something changed - delete all stream messages and footer, then repost
     console.log('Changes detected, refreshing all streams...');
 
     for (const message of streamMessages) {
       await message.delete().catch(() => {});
-    }
-
-    // Add header if missing
-    if (!hasHeader) {
-      console.log('Adding header embed...');
-      await channel.send({ embeds: [createHeaderEmbed()] });
     }
 
     // Post all streams in order
@@ -284,10 +276,11 @@ async function postScheduleToChannel(forceRefresh = false) {
       console.log(`Posting: ${stream.title} on ${stream.date}`);
       const embed = createStreamEmbed(stream, scheduleData.streamer, scheduleData.categories);
       await channel.send({ embeds: [embed] });
-      if (i < upcomingStreams.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
+
+    // Post footer last
+    await channel.send({ embeds: [createFooterEmbed()] });
 
     console.log(`Schedule updated in #${channel.name}`);
   } catch (error) {
