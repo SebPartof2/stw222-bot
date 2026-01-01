@@ -233,14 +233,14 @@ async function postScheduleToChannel(forceRefresh = false) {
     const messages = await channel.messages.fetch({ limit: 100 });
     const now = new Date();
     const streamMessages = [];
-    let hasHeader = false;
+    let headerMessage = null;
 
     // Collect stream messages and check header
     for (const message of messages.values()) {
       if (message.author.id !== client.user.id) continue;
 
       if (isHeaderMessage(message)) {
-        hasHeader = true;
+        headerMessage = message;
         continue;
       }
 
@@ -257,13 +257,17 @@ async function postScheduleToChannel(forceRefresh = false) {
     const streamsMatch = existingKeys.length === upcomingKeys.length &&
       existingKeys.every((key, i) => key === upcomingKeys[i]);
 
-    if (streamsMatch && hasHeader) {
+    if (streamsMatch && headerMessage) {
       console.log('No changes needed');
       return;
     }
 
     // Something changed - delete all stream messages and footer, then repost
     console.log('Changes detected, refreshing all streams...');
+
+    if (headerMessage) {
+      await headerMessage.delete().catch(() => {});
+    }
 
     for (const message of streamMessages) {
       await message.delete().catch(() => {});
