@@ -49,8 +49,8 @@ function parseStreamDateTime(stream) {
   const louisvilleAsUtc = new Date(louisvilleStr);
   const offsetMs = louisvilleAsUtc - tempDate;
 
-  // Apply offset to get correct UTC time
-  return new Date(tempDate.getTime() + offsetMs);
+  // Apply offset to get correct UTC time (subtract because we're converting FROM Louisville TO UTC)
+  return new Date(tempDate.getTime() - offsetMs);
 }
 
 function getUpcomingStreams(scheduleData) {
