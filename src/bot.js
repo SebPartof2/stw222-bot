@@ -4,7 +4,6 @@ const crypto = require('crypto');
 
 const SCHEDULE_URL = 'https://raw.githubusercontent.com/stw222/stw222-schedule/main/data/schedule.json';
 const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
-const TIMEZONE = 'America/Louisville';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
@@ -25,66 +24,19 @@ async function fetchSchedule() {
   return response.json();
 }
 
-function parseStreamDateTime(stream) {
-  // Parse date parts and pad with zeros if needed
-  const [year, month, day] = stream.date.split('-');
-  const paddedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-
-  // Create date string and parse in Louisville timezone
-  const dateStr = `${paddedDate}T${stream.startTime}:00`;
-
-  // Use Intl to get the UTC offset for Louisville at this date/time
-  const tempDate = new Date(dateStr + 'Z');
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: TIMEZONE,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false
-  });
-
-  // Calculate offset by comparing UTC interpretation with Louisville interpretation
-  const parts = formatter.formatToParts(tempDate);
-  const getPart = (type) => parts.find(p => p.type === type)?.value;
-  const louisvilleStr = `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}Z`;
-  const louisvilleAsUtc = new Date(louisvilleStr);
-  const offsetMs = louisvilleAsUtc - tempDate;
-
-  // Apply offset to get correct UTC time (subtract because we're converting FROM Louisville TO UTC)
-  return new Date(tempDate.getTime() - offsetMs);
-}
-
-function getNowInLouisville() {
-  // Get current date/time in Louisville timezone as comparable string
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TIMEZONE,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false
-  });
-  const parts = formatter.formatToParts(now);
-  const getPart = (type) => parts.find(p => p.type === type)?.value;
-  return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`;
-}
-
-function getStreamLouisvilleTime(stream) {
-  // Get stream time as Louisville local time string for comparison
-  const [year, month, day] = stream.date.split('-');
-  const paddedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-  return `${paddedDate}T${stream.startTime}`;
-}
-
 function getUpcomingStreams(scheduleData) {
-  // Compare times in Louisville timezone
-  const nowLouisville = getNowInLouisville();
+  const now = new Date();
 
   return scheduleData.streams
-    .map(stream => ({
-      ...stream,
-      dateTime: parseStreamDateTime(stream),
-      louisvilleTime: getStreamLouisvilleTime(stream)
-    }))
-    .filter(stream => stream.louisvilleTime > nowLouisville)
-    .sort((a, b) => a.louisvilleTime.localeCompare(b.louisvilleTime));
+    .map(stream => {
+      // Parse stream date/time as local time (server should be set to America/Louisville)
+      const [year, month, day] = stream.date.split('-');
+      const paddedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      const dateTime = new Date(`${paddedDate}T${stream.startTime}:00`);
+      return { ...stream, dateTime };
+    })
+    .filter(stream => stream.dateTime > now)
+    .sort((a, b) => a.dateTime - b.dateTime);
 }
 
 function getStreamId(stream) {
