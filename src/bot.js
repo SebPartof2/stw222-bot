@@ -53,16 +53,38 @@ function parseStreamDateTime(stream) {
   return new Date(tempDate.getTime() - offsetMs);
 }
 
-function getUpcomingStreams(scheduleData) {
+function getNowInLouisville() {
+  // Get current date/time in Louisville timezone as comparable string
   const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  });
+  const parts = formatter.formatToParts(now);
+  const getPart = (type) => parts.find(p => p.type === type)?.value;
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}`;
+}
+
+function getStreamLouisvilleTime(stream) {
+  // Get stream time as Louisville local time string for comparison
+  const [year, month, day] = stream.date.split('-');
+  const paddedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  return `${paddedDate}T${stream.startTime}`;
+}
+
+function getUpcomingStreams(scheduleData) {
+  // Compare times in Louisville timezone
+  const nowLouisville = getNowInLouisville();
 
   return scheduleData.streams
     .map(stream => ({
       ...stream,
-      dateTime: parseStreamDateTime(stream)
+      dateTime: parseStreamDateTime(stream),
+      louisvilleTime: getStreamLouisvilleTime(stream)
     }))
-    .filter(stream => stream.dateTime > now)
-    .sort((a, b) => a.dateTime - b.dateTime);
+    .filter(stream => stream.louisvilleTime > nowLouisville)
+    .sort((a, b) => a.louisvilleTime.localeCompare(b.louisvilleTime));
 }
 
 function getStreamId(stream) {
@@ -250,7 +272,6 @@ async function postScheduleToChannel(forceRefresh = false) {
 
     // Fetch existing messages
     const messages = await channel.messages.fetch({ limit: 100 });
-    const now = new Date();
     const streamMessages = [];
     let headerMessage = null;
 
