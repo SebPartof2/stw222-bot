@@ -4,6 +4,7 @@ const crypto = require('crypto');
 
 const SCHEDULE_URL = 'https://raw.githubusercontent.com/stw222/stw222-schedule/main/data/schedule.json';
 const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
+const TIMEZONE = 'America/Louisville';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
@@ -24,14 +25,32 @@ async function fetchSchedule() {
   return response.json();
 }
 
-function parseStreamDateTime(stream, timezone) {
+function parseStreamDateTime(stream) {
   // Parse date parts and pad with zeros if needed
   const [year, month, day] = stream.date.split('-');
   const paddedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 
-  // Parse as Eastern Time (America/New_York)
-  const dateStr = `${paddedDate}T${stream.startTime}:00-05:00`;
-  return new Date(dateStr);
+  // Create date string and parse in Louisville timezone
+  const dateStr = `${paddedDate}T${stream.startTime}:00`;
+
+  // Use Intl to get the UTC offset for Louisville at this date/time
+  const tempDate = new Date(dateStr + 'Z');
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false
+  });
+
+  // Calculate offset by comparing UTC interpretation with Louisville interpretation
+  const parts = formatter.formatToParts(tempDate);
+  const getPart = (type) => parts.find(p => p.type === type)?.value;
+  const louisvilleStr = `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}Z`;
+  const louisvilleAsUtc = new Date(louisvilleStr);
+  const offsetMs = louisvilleAsUtc - tempDate;
+
+  // Apply offset to get correct UTC time
+  return new Date(tempDate.getTime() + offsetMs);
 }
 
 function getUpcomingStreams(scheduleData) {
@@ -40,7 +59,7 @@ function getUpcomingStreams(scheduleData) {
   return scheduleData.streams
     .map(stream => ({
       ...stream,
-      dateTime: parseStreamDateTime(stream, scheduleData.timezone)
+      dateTime: parseStreamDateTime(stream)
     }))
     .filter(stream => stream.dateTime > now)
     .sort((a, b) => a.dateTime - b.dateTime);
