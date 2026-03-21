@@ -2,5 +2,7 @@ services:
   bot:
     image: ghcr.io/sebpartof2/stw222-bot:latest
     restart: unless-stopped
+    environment:
+      - TZ=America/Kentucky/Louisville
     env_file:
       - .env
