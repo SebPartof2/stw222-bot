@@ -1,6 +1,6 @@
 services:
   bot:
-    build: .
+    image: ghcr.io/sebpartof2/stw222-bot:latest
     restart: unless-stopped
     env_file:
       - .env
