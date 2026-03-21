@@ -25,4 +25,4 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: ghcr.io/SebPartof2/stw222-bot:latest
+          tags: ghcr.io/sebpartof2/stw222-bot:latest
