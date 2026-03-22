@@ -36,7 +36,7 @@ function getUpcomingStreams(scheduleData) {
       return { ...stream, dateTime };
     })
     .filter(stream => {
-      const offsetMs = (stream.offset || 0) * 60 * 1000;
+      const offsetMs = (parseInt(stream.offset, 10) || 0) * 60 * 1000;
       return stream.dateTime.getTime() + offsetMs > now.getTime();
     })
     .sort((a, b) => a.dateTime - b.dateTime);
