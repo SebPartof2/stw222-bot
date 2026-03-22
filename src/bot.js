@@ -35,7 +35,10 @@ function getUpcomingStreams(scheduleData) {
       const dateTime = new Date(`${paddedDate}T${stream.startTime}:00`);
       return { ...stream, dateTime };
     })
-    .filter(stream => stream.dateTime > now)
+    .filter(stream => {
+      const offsetMs = (stream.offset || 0) * 60 * 1000;
+      return stream.dateTime.getTime() + offsetMs > now.getTime();
+    })
     .sort((a, b) => a.dateTime - b.dateTime);
 }
 
